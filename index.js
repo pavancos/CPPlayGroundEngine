@@ -20,7 +20,7 @@ const puppeteer = require('puppeteer');
         const contests = [];
         for (let i = 0; i < contestTile.length; i++) {
             contests.push({
-                contest: contestTile[i],
+                contest: contestTile[i].split(' Division')[0],
                 problems: solvedProblems[i].split(',').length,
             });
         }
