@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 
 (async () => {
     const browser = await puppeteer.launch({
-        headless: false, // Launches the browser in non-headless mode so you can see it
+        headless: true, // Launches the browser in non-headless mode so you can see it
         defaultViewport: null, // Uses the default viewport size
         userDataDir: './tmp', // Sets a directory for storing user data
     });
@@ -13,17 +13,19 @@ const puppeteer = require('puppeteer');
     const wrapBox = await page.$$(
         'body > main > div > div > div > div > div > section.rating-data-section.problems-solved'
     );
-    for(const box of wrapBox){
-        // select the text content of element whoose class is "content"
-        const text = await box.$eval('.content', node => node.textContent);
-        console.log(text);
-    }
-    // Iterate throught all the children of wrapBox and get the text content of each element whose selector is "div.content>h5>p>span"
+
     for (const box of wrapBox) {
-        const text = await box.$eval('.content>p', node => node.textContent);
-        console.log(text);
+        const contestTile = await box.$$eval('.content>h5', nodes => nodes.map(node => node.textContent));
+        const solvedProblems = await box.$$eval('.content>p', nodes => nodes.map(node => node.textContent));
+        const contests = [];
+        for (let i = 0; i < contestTile.length; i++) {
+            contests.push({
+                contest: contestTile[i],
+                problems: solvedProblems[i].split(',').length,
+            });
+        }
+        console.log(contests);
     }
 
-    // It's good practice to close the browser when you're done
-    // await browser.close();
+    await browser.close();
 })();
