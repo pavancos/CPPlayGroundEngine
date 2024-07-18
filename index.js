@@ -7,7 +7,7 @@ const puppeteer = require('puppeteer');
         userDataDir: './tmp', // Sets a directory for storing user data
     });
     const page = await browser.newPage();
-    await page.goto('https://www.codechef.com/users/pavankc');
+    await page.goto('https://www.codechef.com/users/siddharthasai');
 
     // Selects elements based on the provided CSS selector
     const wrapBox = await page.$$(
@@ -22,6 +22,7 @@ const puppeteer = require('puppeteer');
             contests.push({
                 contest: contestTile[i].split(' Division')[0],
                 problems: solvedProblems[i].split(',').length,
+                division : contestTile[i].split('Division ')[1].split(' ')[0],
             });
         }
         console.log(contests);
