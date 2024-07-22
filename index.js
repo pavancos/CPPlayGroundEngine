@@ -34,9 +34,17 @@ const scrapeCodeChef = async (username) => {
             });
         }
     }
+    const allRating = await page.evaluate(() => {
+        // I want select know the index of the string "var all_rating= " in the page, its in script
+        const scripts = Array.from(document.querySelectorAll('script')).map(script => script.innerText);
+        const allRatingScript = scripts.find(script => script.includes('var all_rating='));
+        const start = allRatingScript.indexOf('[');
+        const end = allRatingScript.indexOf('];');
+        const allRating = JSON.parse(allRatingScript.slice(start, end + 1));
+    });
 
     await browser.close();
-    return contests;
+    return { contests, allRating };
 };
 
 // Scrape SPOJ data
@@ -44,14 +52,18 @@ const scrapeSPOJ = async (username) => {
     const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.goto(`https://www.spoj.com/status/${username}/`);
+    
 
     const rows = await page.$$eval('table.problems tbody tr', rows => {
         return rows.map(row => {
             const columns = row.querySelectorAll('td');
+
             if (columns[3].textContent.trim() == 'accepted') {
+                
+                
                 return {
                     date: columns[1].textContent.trim().split(' ')[0],
-                    problem: columns[2].textContent.trim(),
+                    problem: columns[2].textContent.trim()
                 };
             }
             return null;
