@@ -34,17 +34,17 @@ const scrapeCodeChef = async (username) => {
             });
         }
     }
-    const allRating = await page.evaluate(() => {
-        // I want select know the index of the string "var all_rating= " in the page, its in script
-        const scripts = Array.from(document.querySelectorAll('script')).map(script => script.innerText);
-        const allRatingScript = scripts.find(script => script.includes('var all_rating='));
-        const start = allRatingScript.indexOf('[');
-        const end = allRatingScript.indexOf('];');
-        const allRating = JSON.parse(allRatingScript.slice(start, end + 1));
-    });
+    // const allRating = await page.evaluate(() => {
+    //     // I want select know the index of the string "var all_rating= " in the page, its in script
+    //     const scripts = Array.from(document.querySelectorAll('script')).map(script => script.innerText);
+    //     const allRatingScript = scripts.find(script => script.includes('var all_rating='));
+    //     const start = allRatingScript.indexOf('[');
+    //     const end = allRatingScript.indexOf('];');
+    //     const allRating = JSON.parse(allRatingScript.slice(start, end + 1));
+    // });
 
     await browser.close();
-    return { contests, allRating };
+    return { contests };
 };
 
 // Scrape SPOJ data
