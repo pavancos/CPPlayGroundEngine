@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const launchBrowser = async () => {
     return await puppeteer.launch({
         headless: true,
-        executablePath: '/opt/render/.cache/puppeteer/chrome/linux-126.0.6478.182/chrome-linux64/chrome',
+        executablePath: '~/.cache/puppeteer/chrome',
         args: ['--no-sandbox', '--disable-setuid-sandbox'], // Necessary flags for some environments
     });
 };
