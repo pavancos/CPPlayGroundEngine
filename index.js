@@ -1,26 +1,24 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const launchBrowser = async () => {
     return await puppeteer.launch({
-        headless: false,
-        defaultViewport: null,
-        userDataDir: './tmp',
+        headless: true,
+        executablePath: '/opt/render/.cache/puppeteer/chrome/linux-126.0.6478.182/chrome-linux64/chrome',
+        args: ['--no-sandbox', '--disable-setuid-sandbox'], // Necessary flags for some environments
     });
 };
 
 // Scrape CodeChef data
 const scrapeCodeChef = async (username) => {
-    const browser = await puppeteer.launch({executablePath: '/opt/render/.cache/puppeteer/chrome/linux-126.0.6478.182/chrome-linux64/chrome'});
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.goto(`https://www.codechef.com/users/${username}`);
 
-    const wrapBox = await page.$$(
-        'body > main > div > div > div > div > div > section.rating-data-section.problems-solved'
-    );
+    const wrapBox = await page.$$('body > main > div > div > div > div > div > section.rating-data-section.problems-solved');
 
     const contests = [];
     for (const box of wrapBox) {
@@ -34,14 +32,6 @@ const scrapeCodeChef = async (username) => {
             });
         }
     }
-    // const allRating = await page.evaluate(() => {
-    //     // I want select know the index of the string "var all_rating= " in the page, its in script
-    //     const scripts = Array.from(document.querySelectorAll('script')).map(script => script.innerText);
-    //     const allRatingScript = scripts.find(script => script.includes('var all_rating='));
-    //     const start = allRatingScript.indexOf('[');
-    //     const end = allRatingScript.indexOf('];');
-    //     const allRating = JSON.parse(allRatingScript.slice(start, end + 1));
-    // });
 
     await browser.close();
     return { contests };
@@ -52,15 +42,11 @@ const scrapeSPOJ = async (username) => {
     const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.goto(`https://www.spoj.com/status/${username}/`);
-    
 
     const rows = await page.$$eval('table.problems tbody tr', rows => {
         return rows.map(row => {
             const columns = row.querySelectorAll('td');
-
             if (columns[3].textContent.trim() == 'accepted') {
-                
-                
                 return {
                     date: columns[1].textContent.trim().split(' ')[0],
                     problem: columns[2].textContent.trim()
