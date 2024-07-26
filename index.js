@@ -14,7 +14,7 @@ const launchBrowser = async () => {
 
 // Scrape CodeChef data
 const scrapeCodeChef = async (username) => {
-    const browser = await launchBrowser();
+    const browser = await puppeteer.launch({executablePath: '/opt/render/.cache/puppeteer/chrome/linux-126.0.6478.182/chrome-linux64/chrome'});
     const page = await browser.newPage();
     await page.goto(`https://www.codechef.com/users/${username}`);
 
