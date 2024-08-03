@@ -1,5 +1,6 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = 3000;
@@ -34,18 +35,51 @@ const scrapeCodeChef = async (username) => {
             });
         }
     }
-    // const allRating = await page.evaluate(() => {
-    //     // I want select know the index of the string "var all_rating= " in the page, its in script
-    //     const scripts = Array.from(document.querySelectorAll('script')).map(script => script.innerText);
-    //     const allRatingScript = scripts.find(script => script.includes('var all_rating='));
-    //     const start = allRatingScript.indexOf('[');
-    //     const end = allRatingScript.indexOf('];');
-    //     const allRating = JSON.parse(allRatingScript.slice(start, end + 1));
-    // });
+    
 
     await browser.close();
     return { contests };
 };
+// Returns the all_rating object of the user
+const getAllRating= async(username)=>{
+    try{
+        let res = await fetch(`https://www.codechef.com/users/${username}`);
+        const text = await res.text();
+        const allRatingIndex = text.indexOf('var all_rating =');
+        const endPoint = text.indexOf(';',allRatingIndex);
+        // console.log(text.substring(allRatingIndex+16,endPoint));
+        return JSON.parse(text.substring(allRatingIndex+16,endPoint));
+    }catch(err){
+        console.log(err);
+    }
+}
+// Returns the Data of Contests of the user 
+const getDataofContests = async (username) => {
+    try {
+        let res = await fetch(`https://www.codechef.com/users/${username}`);
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        const contentData = [];
+        $('div.content').each((index, element) => {
+            const name = $(element).find('h5 > span').html();
+            const problems = [];
+            
+            $(element).find('p > span > span').each((i, el) => {
+                problems.push($(el).html());
+            });
+            if(name != null){
+                contentData.push({
+                    name: name,
+                    problems: problems,
+                    noOfProblems: problems.length
+                });
+            }
+        });
+        return contentData;
+    }catch(err){
+        console.log(err);
+    }
+}
 
 // Scrape SPOJ data
 const scrapeSPOJ = async (username) => {
@@ -79,6 +113,28 @@ app.get('/codechef/:username', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeCodeChef(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/codechef/:username/rating', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await getAllRating(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+
+app.get('/codechef/:username/contests', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await getDataofContests(username);
         res.json(data);
     } catch (error) {
         res.status(500).json({ error: error.message });
