@@ -3,7 +3,7 @@ const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 
 const app = express();
-const PORT = 3000;
+const PORT = 8888;
 
 const launchBrowser = async () => {
     return await puppeteer.launch({
@@ -15,30 +15,60 @@ const launchBrowser = async () => {
 
 // Scrape CodeChef data
 const scrapeCodeChef = async (username) => {
-    const browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.goto(`https://www.codechef.com/users/${username}`);
-
-    const wrapBox = await page.$$(
-        'body > main > div > div > div > div > div > section.rating-data-section.problems-solved'
-    );
-
-    const contests = [];
-    for (const box of wrapBox) {
-        const contestTile = await box.$$eval('.content>h5', nodes => nodes.map(node => node.textContent));
-        const solvedProblems = await box.$$eval('.content>p', nodes => nodes.map(node => node.textContent));
-        for (let i = 0; i < contestTile.length; i++) {
-            contests.push({
-                contest: contestTile[i].split(' Division')[0],
-                problems: solvedProblems[i].split(',').length,
-                division: contestTile[i].split('Division ')[1].split(' ')[0],
+    try {
+        let res = await fetch(`https://www.codechef.com/users/${username}`, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Referer': 'https://www.codechef.com/',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+        });
+        const html = await res.text();
+        const allRatingIndex = html.indexOf('var all_rating =');
+        const endPoint = html.indexOf(';',allRatingIndex);
+        let allRating = JSON.parse(html.substring(allRatingIndex+16,endPoint));
+        
+        const $ = cheerio.load(html);
+        const contentData = [];
+        $('div.content').each((index, element) => {
+            const name = $(element).find('h5 > span').html();
+            const problems = [];
+            
+            $(element).find('p > span > span').each((i, el) => {
+                problems.push($(el).html());
             });
-        }
+            if(name != null && name.split(" ")[0] == "Starters" ){
+                contentData.push({
+                    name: name,
+                    code: name.split(' ')[1],
+                    problems: problems,
+                    noOfProblems: problems.length
+                });
+            }
+        });
+        let dataofSolvedProblems = contentData;
+        let newAllRating = allRating.map((rating)=>{
+            if(rating.name.split(' ')[0] =='Starters'){
+                // console.log(rating.name)
+                let details = dataofSolvedProblems.find((data)=>data.name == rating.name);
+                if(details != undefined ){
+                    return {
+                        ...rating,
+                        problemsSolved : details.problems,
+                        noOfProblems: details.noOfProblems
+                    }
+                }
+            }
+        })
+        return newAllRating;
+    }catch(err){
+        console.log(err);
     }
     
-
-    await browser.close();
-    return { contests };
 };
 // Returns the all_rating object of the user
 const getAllRating= async(username)=>{
@@ -58,6 +88,7 @@ const getDataofContests = async (username) => {
     try {
         let res = await fetch(`https://www.codechef.com/users/${username}`);
         const html = await res.text();
+        
         const $ = cheerio.load(html);
         const contentData = [];
         $('div.content').each((index, element) => {
@@ -67,9 +98,10 @@ const getDataofContests = async (username) => {
             $(element).find('p > span > span').each((i, el) => {
                 problems.push($(el).html());
             });
-            if(name != null){
+            if(name != null && name.split(" ")[0] == "Starters" ){
                 contentData.push({
                     name: name,
+                    code: name.split(' ')[1],
                     problems: problems,
                     noOfProblems: problems.length
                 });
@@ -81,32 +113,6 @@ const getDataofContests = async (username) => {
     }
 }
 
-// Scrape SPOJ data
-const scrapeSPOJ = async (username) => {
-    const browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.goto(`https://www.spoj.com/status/${username}/`);
-    
-
-    const rows = await page.$$eval('table.problems tbody tr', rows => {
-        return rows.map(row => {
-            const columns = row.querySelectorAll('td');
-
-            if (columns[3].textContent.trim() == 'accepted') {
-                
-                
-                return {
-                    date: columns[1].textContent.trim().split(' ')[0],
-                    problem: columns[2].textContent.trim()
-                };
-            }
-            return null;
-        }).filter(row => row !== null);
-    });
-
-    await browser.close();
-    return rows;
-};
 
 // Define the /codechef endpoint
 app.get('/codechef/:username', async (req, res) => {
@@ -130,7 +136,6 @@ app.get('/codechef/:username/rating', async (req, res) => {
 });
 
 
-
 app.get('/codechef/:username/contests', async (req, res) => {
     const username = req.params.username;
     try {
@@ -141,16 +146,6 @@ app.get('/codechef/:username/contests', async (req, res) => {
     }
 });
 
-// Define the /spoj endpoint
-app.get('/spoj/:username', async (req, res) => {
-    const username = req.params.username;
-    try {
-        const data = await scrapeSPOJ(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
