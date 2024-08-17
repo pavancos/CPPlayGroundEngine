@@ -13,6 +13,32 @@ const launchBrowser = async () => {
     });
 };
 
+// Scrape AtCoder data
+const scrapeAtCoder = async (username) => {
+    const url = `https://atcoder.jp/users/${username}/history?contestType=algo`;
+    const response = await fetch(url);
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let contests = [];
+    $('#history tbody tr').each((index, element) => {
+        const date = $(element).find('td').eq(0).text();
+        const name = $(element).find('td').eq(1).text().trim();
+        const rank = $(element).find('td').eq(2).text();
+
+        contests.push({
+            date,
+            name,
+            rank
+        });
+    });
+    
+    contests = contests.reverse();
+
+    console.log('contests: ', contests);
+    return { contests };
+};
+
 // Scrape CodeChef data
 const scrapeCodeChef = async (username) => {
     const browser = await launchBrowser();
@@ -35,25 +61,25 @@ const scrapeCodeChef = async (username) => {
             });
         }
     }
-    
 
     await browser.close();
     return { contests };
 };
+
 // Returns the all_rating object of the user
-const getAllRating= async(username)=>{
-    try{
+const getAllRating = async (username) => {
+    try {
         let res = await fetch(`https://www.codechef.com/users/${username}`);
         const text = await res.text();
         const allRatingIndex = text.indexOf('var all_rating =');
-        const endPoint = text.indexOf(';',allRatingIndex);
-        // console.log(text.substring(allRatingIndex+16,endPoint));
-        return JSON.parse(text.substring(allRatingIndex+16,endPoint));
-    }catch(err){
+        const endPoint = text.indexOf(';', allRatingIndex);
+        return JSON.parse(text.substring(allRatingIndex + 16, endPoint));
+    } catch (err) {
         console.log(err);
     }
-}
-// Returns the Data of Contests of the user 
+};
+
+// Returns the Data of Contests of the user
 const getDataofContests = async (username) => {
     try {
         let res = await fetch(`https://www.codechef.com/users/${username}`);
@@ -63,11 +89,11 @@ const getDataofContests = async (username) => {
         $('div.content').each((index, element) => {
             const name = $(element).find('h5 > span').html();
             const problems = [];
-            
+
             $(element).find('p > span > span').each((i, el) => {
                 problems.push($(el).html());
             });
-            if(name != null){
+            if (name != null) {
                 contentData.push({
                     name: name,
                     problems: problems,
@@ -76,25 +102,22 @@ const getDataofContests = async (username) => {
             }
         });
         return contentData;
-    }catch(err){
+    } catch (err) {
         console.log(err);
     }
-}
+};
 
 // Scrape SPOJ data
 const scrapeSPOJ = async (username) => {
     const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.goto(`https://www.spoj.com/status/${username}/`);
-    
 
     const rows = await page.$$eval('table.problems tbody tr', rows => {
         return rows.map(row => {
             const columns = row.querySelectorAll('td');
 
             if (columns[3].textContent.trim() == 'accepted') {
-                
-                
                 return {
                     date: columns[1].textContent.trim().split(' ')[0],
                     problem: columns[2].textContent.trim()
@@ -129,8 +152,6 @@ app.get('/codechef/:username/rating', async (req, res) => {
     }
 });
 
-
-
 app.get('/codechef/:username/contests', async (req, res) => {
     const username = req.params.username;
     try {
@@ -146,6 +167,17 @@ app.get('/spoj/:username', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeSPOJ(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Define the /atcoder endpoint
+app.get('/atcoder/:username', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await scrapeAtCoder(username);
         res.json(data);
     } catch (error) {
         res.status(500).json({ error: error.message });
