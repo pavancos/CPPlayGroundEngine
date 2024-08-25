@@ -1,17 +1,9 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 
 const app = express();
 const PORT = 3000;
 
-const launchBrowser = async () => {
-    return await puppeteer.launch({
-        headless: false,
-        defaultViewport: null,
-        userDataDir: './tmp',
-    });
-};
 
 // Scrape AtCoder data
 const scrapeAtCoder = async (username) => {
@@ -32,37 +24,10 @@ const scrapeAtCoder = async (username) => {
             rank
         });
     });
-    
+
     contests = contests.reverse();
 
     console.log('contests: ', contests);
-    return { contests };
-};
-
-// Scrape CodeChef data
-const scrapeCodeChef = async (username) => {
-    const browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.goto(`https://www.codechef.com/users/${username}`);
-
-    const wrapBox = await page.$$(
-        'body > main > div > div > div > div > div > section.rating-data-section.problems-solved'
-    );
-
-    const contests = [];
-    for (const box of wrapBox) {
-        const contestTile = await box.$$eval('.content>h5', nodes => nodes.map(node => node.textContent));
-        const solvedProblems = await box.$$eval('.content>p', nodes => nodes.map(node => node.textContent));
-        for (let i = 0; i < contestTile.length; i++) {
-            contests.push({
-                contest: contestTile[i].split(' Division')[0],
-                problems: solvedProblems[i].split(',').length,
-                division: contestTile[i].split('Division ')[1].split(' ')[0],
-            });
-        }
-    }
-
-    await browser.close();
     return { contests };
 };
 
@@ -106,41 +71,41 @@ const getDataofContests = async (username) => {
         console.log(err);
     }
 };
+const scrapeCodechefProblems = async (username) => {
+    const url = `https://www.codechef.com/users/${username}`;
+    const res = await fetch(url);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    const problemsSolved = $('section.rating-data-section.problems-solved > h3').text().trim();
+    return problemsSolved;
+}
 
 // Scrape SPOJ data
 const scrapeSPOJ = async (username) => {
-    const browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.goto(`https://www.spoj.com/status/${username}/`);
+    const url = `https://www.spoj.com/users/${username}/`;
+    const res = await fetch(url);
+    const html = await res.text();
+    const $ = cheerio.load(html);
 
-    const rows = await page.$$eval('table.problems tbody tr', rows => {
-        return rows.map(row => {
-            const columns = row.querySelectorAll('td');
+    let problems = [];
+    $('table.table.table-condensed tr').each((index, element) => {
+        if (index === 0)
+            return;
+        const col = $(element).find('td');
 
-            if (columns[3].textContent.trim() == 'accepted') {
-                return {
-                    date: columns[1].textContent.trim().split(' ')[0],
-                    problem: columns[2].textContent.trim()
-                };
-            }
-            return null;
-        }).filter(row => row !== null);
+        const problemName = $(col[0]).text().trim();
+        // const submissions = $(col[4]).text().trim();
+
+        problems.push({
+            problem: problemName,
+            // submissions: submissions
+        });
     });
-
-    await browser.close();
-    return rows;
+    return problems;
 };
 
 // Define the /codechef endpoint
-app.get('/codechef/:username', async (req, res) => {
-    const username = req.params.username;
-    try {
-        const data = await scrapeCodeChef(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
 app.get('/codechef/:username/rating', async (req, res) => {
     const username = req.params.username;
@@ -162,8 +127,19 @@ app.get('/codechef/:username/contests', async (req, res) => {
     }
 });
 
+// Codechef Total Problems Solved 
+app.get('/codechef/:username/problems', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await scrapeCodechefProblems(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Define the /spoj endpoint
-app.get('/spoj/:username', async (req, res) => {
+app.get('/spoj/:username/problems', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeSPOJ(username);
@@ -174,13 +150,184 @@ app.get('/spoj/:username', async (req, res) => {
 });
 
 // Define the /atcoder endpoint
-app.get('/atcoder/:username', async (req, res) => {
+app.get('/atcoder/:username/contests', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeAtCoder(username);
         res.json(data);
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+
+// Leetcode : Getting data of contests
+async function fetchLeetCodeContestsData(username) {
+    const url = 'https://leetcode.com/graphql';
+    const query = `
+        query getUserContestRanking ($username: String!) {
+            userContestRanking(username: $username) {
+                attendedContestsCount
+                rating
+                globalRanking
+                totalParticipants
+                topPercentage
+                badge {
+                    name
+                }
+            }
+            userContestRankingHistory(username: $username) {
+                attended
+                rating
+                ranking
+                trendDirection
+                problemsSolved
+                totalProblems
+                finishTimeInSeconds
+                contest {
+                    title
+                    startTime
+                }
+            }
+        }
+    `;
+    const variables = { username };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json',
+                'Referer': 'https://leetcode.com/',
+                'Origin': 'https://leetcode.com'
+            },
+            body: JSON.stringify({
+                query,
+                variables,
+            }),
+        });
+
+        const data = await response.json();
+        if (data.data && data.data.userContestRankingHistory) {
+            data.data.userContestRankingHistory = data.data.userContestRankingHistory.filter(contest => contest.attended);
+            data.data.userContestRankingHistory.reverse();
+        }
+        return { username, data: data.data };
+    } catch (error) {
+        console.error(`Failed to fetch data for ${username}:`, error);
+        return { username, error: error.message };
+    }
+}
+
+// Define a route to fetch LeetCode data
+app.get('/leetcode/:username/contests', async (req, res) => {
+    const username = req.params.username;
+    const data = await fetchLeetCodeContestsData(username);
+    res.json(data);
+});
+
+
+// Leetcode : Getting data of Number of Problems Slolved
+async function fetchLeetCodeProblemsData(username) {
+    const url = 'https://leetcode.com/graphql';
+    const query = `
+        query userProblemsSolved($username: String!) {
+            allQuestionsCount {
+                difficulty
+                count
+            }
+            matchedUser(username: $username) {
+                problemsSolvedBeatsStats {
+                    difficulty
+                    percentage
+                }
+                submitStatsGlobal {
+                    acSubmissionNum {
+                        difficulty
+                        count
+                    }
+                }
+            }
+        }
+    `;
+    const variables = { username };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json',
+                'Referer': 'https://leetcode.com/',
+                'Origin': 'https://leetcode.com'
+            },
+            body: JSON.stringify({
+                query,
+                variables,
+            }),
+        });
+
+        const data = await response.json();
+
+
+        return { username, data: data.data };
+    } catch (error) {
+        console.error(`Failed to fetch data for ${username}:`, error);
+        return { username, error: error.message };
+    }
+}
+
+
+// Define the /leetcode/:username/problems endpoint
+app.get('/leetcode/:username/problems', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await fetchLeetCodeProblemsData(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+// Codeforeces: Get the data of Submission of the user
+const fetchCodeforcesData = async (username) => {
+    const url = `https://codeforces.com/api/user.status?handle=${username}`;
+    const response = await fetch(url);
+    let data = await response.json();
+    data = data.result.filter(submission => submission.verdict === 'OK');
+    return data;
+};
+
+// Codeforeces: /codeforces/:username/problems endpoint
+app.get('/codeforces/:username/problems', async (req, res) => {
+    const username = req.params.username;
+    try {
+        const data = await fetchCodeforcesData(username);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+const fetchCodeforcesContest = async (username) =>{
+    const url = `https://codeforces.com/api/user.rating?handle=${username}`;
+    const response = await fetch(url);
+    let data = await response.json();
+    data = data.result.reverse();
+    return data;
+}
+
+app.get('/codeforces/:username/contests',async (req,res)=>{
+    const username = req.params.username;
+    try{
+        const data = await fetchCodeforcesContest(username);
+        res.json(data);
+    }catch(error){
+        res.status(500).json({error:error.message});
     }
 });
 
