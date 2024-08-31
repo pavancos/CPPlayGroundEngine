@@ -4,6 +4,10 @@ const cheerio = require('cheerio');
 const app = express();
 const PORT =  process.env.PORT || 3000;
 
+app.get('/', (req, res) => {
+    res.send('CP PlayGround Engine');
+});
+
 
 // Scrape AtCoder data
 const scrapeAtCoder = async (username) => {
