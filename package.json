@@ -2,7 +2,7 @@
   "name": "scrapping",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,8 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "cheerio": "^1.0.0-rc.12",
-    "express": "^4.19.2",
-    "puppeteer": "^22.13.1",
-    "puppeteer-core": "^22.13.1"
+    "express": "^4.19.2"
   }
 }
