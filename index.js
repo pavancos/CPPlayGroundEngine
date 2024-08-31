@@ -277,13 +277,18 @@ app.get('/all', async (req, res) => {
         const spojData = await scrapeSPOJ(spoj);
         const atcoderData = await scrapeAtCoder(atcoder);
         const leetcodeData = await fetchLeetCodeContestsData(leetcode);
-        const codeforcesData = await fetchCodeforcesData(codeforces);
+        const codeforcesProblems = await fetchCodeforcesData(codeforces);
+        const codeforcesContests = await fetchCodeforcesContest(codeforces);
         const data = {
             codechef: codechefData,
             spoj: spojData,
             atcoder: atcoderData,
             leetcode: leetcodeData,
-            codeforces: codeforcesData
+            codeforces: {
+                username: codeforces,
+                problems: codeforcesProblems,
+                contests: codeforcesContests
+            }
         };
         res.json(data);
     } catch (error) {
