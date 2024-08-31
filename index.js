@@ -2,7 +2,7 @@ const express = require('express');
 const cheerio = require('cheerio');
 
 const app = express();
-const PORT = 3000;
+const PORT =  process.env.PORT || 3000;
 
 
 // Scrape AtCoder data
@@ -26,30 +26,21 @@ const scrapeAtCoder = async (username) => {
     });
 
     contests = contests.reverse();
-
     console.log('contests: ', contests);
     return { contests };
 };
 
 // Returns the all_rating object of the user
-const getAllRating = async (username) => {
+const getCodeChefData = async (username) => {
     try {
         let res = await fetch(`https://www.codechef.com/users/${username}`);
         const text = await res.text();
+        const $ = cheerio.load(text);
         const allRatingIndex = text.indexOf('var all_rating =');
         const endPoint = text.indexOf(';', allRatingIndex);
-        return JSON.parse(text.substring(allRatingIndex + 16, endPoint));
-    } catch (err) {
-        console.log(err);
-    }
-};
+        
+        let retingData = JSON.parse(text.substring(allRatingIndex + 16, endPoint));
 
-// Returns the Data of Contests of the user
-const getDataofContests = async (username) => {
-    try {
-        let res = await fetch(`https://www.codechef.com/users/${username}`);
-        const html = await res.text();
-        const $ = cheerio.load(html);
         const contentData = [];
         $('div.content').each((index, element) => {
             const name = $(element).find('h5 > span').html();
@@ -66,72 +57,67 @@ const getDataofContests = async (username) => {
                 });
             }
         });
-        return contentData;
+        const problemsSolved = $('section.rating-data-section.problems-solved > h3').text().trim();
+
+        // Merge Contest data and Rating data by using the name of the contest
+        let fullContestData = [];
+        for (let i = 0; i < retingData.length; i++) {
+            let contestData = contentData.find((data) => data.name === retingData[i].name);
+            if (contestData) {
+                retingData[i].problems = contestData.problems;
+                retingData[i].noOfProblems = contestData.noOfProblems;
+                fullContestData.push(retingData[i]);
+            }
+        }
+        fullContestData = fullContestData.reverse();
+        console.log('fullContestData: ', fullContestData);
+
+        let data = {
+            username: username,
+            contests: fullContestData,
+            problemsSolved: problemsSolved
+        };
+        return data;
     } catch (err) {
         console.log(err);
     }
 };
-const scrapeCodechefProblems = async (username) => {
-    const url = `https://www.codechef.com/users/${username}`;
-    const res = await fetch(url);
-    const html = await res.text();
-    const $ = cheerio.load(html);
 
-    const problemsSolved = $('section.rating-data-section.problems-solved > h3').text().trim();
-    return problemsSolved;
-}
 
 // Scrape SPOJ data
 const scrapeSPOJ = async (username) => {
-    const url = `https://www.spoj.com/users/${username}/`;
+    const url = `https://www.spoj.com/status/${username}/`;
     const res = await fetch(url);
     const html = await res.text();
     const $ = cheerio.load(html);
 
     let problems = [];
-    $('table.table.table-condensed tr').each((index, element) => {
-        if (index === 0)
-            return;
+    
+    $('tr').each((index, element) => {
+        if (index === 0) return; // Skip the header row
+
         const col = $(element).find('td');
+        const status = $(col[3]).text().trim(); // The status column (Accepted, Wrong Answer, etc.)
+        
+        if (status === "Accepted") {
+            const problemName = $(col[2]).text().trim(); // The problem name column
+            const submissionDate = $(col[1]).text().trim(); // The submission date column
 
-        const problemName = $(col[0]).text().trim();
-        // const submissions = $(col[4]).text().trim();
-
-        problems.push({
-            problem: problemName,
-            // submissions: submissions
-        });
+            problems.push({
+                problem: problemName,
+                submissionDate: submissionDate
+            });
+        }
     });
+    
     return problems;
 };
-
 // Define the /codechef endpoint
 
-app.get('/codechef/:username/rating', async (req, res) => {
+app.get('/codechef/:username', async (req, res) => {
     const username = req.params.username;
     try {
-        const data = await getAllRating(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.get('/codechef/:username/contests', async (req, res) => {
-    const username = req.params.username;
-    try {
-        const data = await getDataofContests(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Codechef Total Problems Solved 
-app.get('/codechef/:username/problems', async (req, res) => {
-    const username = req.params.username;
-    try {
-        const data = await scrapeCodechefProblems(username);
+        const data = await getCodeChefData(username);
         res.json(data);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -139,7 +125,7 @@ app.get('/codechef/:username/problems', async (req, res) => {
 });
 
 // Define the /spoj endpoint
-app.get('/spoj/:username/problems', async (req, res) => {
+app.get('/spoj/:username', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeSPOJ(username);
@@ -150,7 +136,7 @@ app.get('/spoj/:username/problems', async (req, res) => {
 });
 
 // Define the /atcoder endpoint
-app.get('/atcoder/:username/contests', async (req, res) => {
+app.get('/atcoder/:username', async (req, res) => {
     const username = req.params.username;
     try {
         const data = await scrapeAtCoder(username);
@@ -189,52 +175,7 @@ async function fetchLeetCodeContestsData(username) {
                     startTime
                 }
             }
-        }
-    `;
-    const variables = { username };
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'application/json',
-                'Referer': 'https://leetcode.com/',
-                'Origin': 'https://leetcode.com'
-            },
-            body: JSON.stringify({
-                query,
-                variables,
-            }),
-        });
-
-        const data = await response.json();
-        if (data.data && data.data.userContestRankingHistory) {
-            data.data.userContestRankingHistory = data.data.userContestRankingHistory.filter(contest => contest.attended);
-            data.data.userContestRankingHistory.reverse();
-        }
-        return { username, data: data.data };
-    } catch (error) {
-        console.error(`Failed to fetch data for ${username}:`, error);
-        return { username, error: error.message };
-    }
-}
-
-// Define a route to fetch LeetCode data
-app.get('/leetcode/:username/contests', async (req, res) => {
-    const username = req.params.username;
-    const data = await fetchLeetCodeContestsData(username);
-    res.json(data);
-});
-
-
-// Leetcode : Getting data of Number of Problems Slolved
-async function fetchLeetCodeProblemsData(username) {
-    const url = 'https://leetcode.com/graphql';
-    const query = `
-        query userProblemsSolved($username: String!) {
-            allQuestionsCount {
+                            allQuestionsCount {
                 difficulty
                 count
             }
@@ -271,8 +212,10 @@ async function fetchLeetCodeProblemsData(username) {
         });
 
         const data = await response.json();
-
-
+        if (data.data && data.data.userContestRankingHistory) {
+            data.data.userContestRankingHistory = data.data.userContestRankingHistory.filter(contest => contest.attended);
+            data.data.userContestRankingHistory.reverse();
+        }
         return { username, data: data.data };
     } catch (error) {
         console.error(`Failed to fetch data for ${username}:`, error);
@@ -280,16 +223,11 @@ async function fetchLeetCodeProblemsData(username) {
     }
 }
 
-
-// Define the /leetcode/:username/problems endpoint
-app.get('/leetcode/:username/problems', async (req, res) => {
+// Define a route to fetch LeetCode data
+app.get('/leetcode/:username', async (req, res) => {
     const username = req.params.username;
-    try {
-        const data = await fetchLeetCodeProblemsData(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    const data = await fetchLeetCodeContestsData(username);
+    res.json(data);
 });
 
 
@@ -301,18 +239,6 @@ const fetchCodeforcesData = async (username) => {
     data = data.result.filter(submission => submission.verdict === 'OK');
     return data;
 };
-
-// Codeforeces: /codeforces/:username/problems endpoint
-app.get('/codeforces/:username/problems', async (req, res) => {
-    const username = req.params.username;
-    try {
-        const data = await fetchCodeforcesData(username);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 const fetchCodeforcesContest = async (username) =>{
     const url = `https://codeforces.com/api/user.rating?handle=${username}`;
     const response = await fetch(url);
@@ -321,15 +247,45 @@ const fetchCodeforcesContest = async (username) =>{
     return data;
 }
 
-app.get('/codeforces/:username/contests',async (req,res)=>{
+// Codeforeces: /codeforces/:username/problems endpoint
+app.get('/codeforces/:username', async (req, res) => {
     const username = req.params.username;
-    try{
-        const data = await fetchCodeforcesContest(username);
-        res.json(data);
-    }catch(error){
-        res.status(500).json({error:error.message});
+    try {
+        const data = await fetchCodeforcesData(username);
+        const contestsData = await fetchCodeforcesContest(username);
+        let codeforcesData = {
+            username: username,
+            problems: data,
+            contests: contestsData
+        };
+        res.json(codeforcesData);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
+
+// get data of all platforms of a user
+app.get('/all', async (req, res) => {
+    const { codechef, spoj, atcoder, leetcode, codeforces } = req.query;
+    try {
+        const codechefData = await getCodeChefData(codechef);
+        const spojData = await scrapeSPOJ(spoj);
+        const atcoderData = await scrapeAtCoder(atcoder);
+        const leetcodeData = await fetchLeetCodeContestsData(leetcode);
+        const codeforcesData = await fetchCodeforcesData(codeforces);
+        const data = {
+            codechef: codechefData,
+            spoj: spojData,
+            atcoder: atcoderData,
+            leetcode: leetcodeData,
+            codeforces: codeforcesData
+        };
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
