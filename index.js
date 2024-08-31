@@ -1,8 +1,8 @@
 const express = require('express');
 const cheerio = require('cheerio');
+const app = express();
 const cors = require('cors');
 app.use(cors({ origin: '*' }));
-const app = express();
 const PORT =  process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
