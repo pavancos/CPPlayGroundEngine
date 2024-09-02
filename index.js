@@ -32,7 +32,7 @@ const scrapeAtCoder = async (username) => {
 
     contests = contests.reverse();
     // console.log('contests: ', contests);
-    return { contests };
+    return { contests, username };
 };
 
 // Returns the all_rating object of the user
