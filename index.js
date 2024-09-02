@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const app = express();
 const cors = require('cors');
 app.use(cors({ origin: '*' }));
-const PORT =  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
     res.send('CP PlayGround Engine');
@@ -31,7 +31,7 @@ const scrapeAtCoder = async (username) => {
     });
 
     contests = contests.reverse();
-    console.log('contests: ', contests);
+    // console.log('contests: ', contests);
     return { contests };
 };
 
@@ -43,8 +43,9 @@ const getCodeChefData = async (username) => {
         const $ = cheerio.load(text);
         const allRatingIndex = text.indexOf('var all_rating =');
         const endPoint = text.indexOf(';', allRatingIndex);
-        
+
         let retingData = JSON.parse(text.substring(allRatingIndex + 16, endPoint));
+        console.log('retingData: ', retingData);
 
         const contentData = [];
         $('div.content').each((index, element) => {
@@ -97,14 +98,14 @@ const scrapeSPOJ = async (username) => {
     const $ = cheerio.load(html);
 
     let problems = [];
-    
+
     $('tr').each((index, element) => {
         if (index === 0) return; // Skip the header row
 
         const col = $(element).find('td');
         const status = $(col[3]).text().trim(); // The status column (Accepted, Wrong Answer, etc.)
-        
-        if (status === "Accepted") {
+
+        if (status === "accepted") {
             const problemName = $(col[2]).text().trim(); // The problem name column
             const submissionDate = $(col[1]).text().trim(); // The submission date column
 
@@ -114,7 +115,7 @@ const scrapeSPOJ = async (username) => {
             });
         }
     });
-    
+
     return problems;
 };
 // Define the /codechef endpoint
@@ -244,7 +245,7 @@ const fetchCodeforcesData = async (username) => {
     data = data.result.filter(submission => submission.verdict === 'OK');
     return data;
 };
-const fetchCodeforcesContest = async (username) =>{
+const fetchCodeforcesContest = async (username) => {
     const url = `https://codeforces.com/api/user.rating?handle=${username}`;
     const response = await fetch(url);
     let data = await response.json();
@@ -272,28 +273,54 @@ app.get('/codeforces/:username', async (req, res) => {
 // get data of all platforms of a user
 app.get('/all', async (req, res) => {
     const { codechef, spoj, atcoder, leetcode, codeforces } = req.query;
+
     try {
-        const codechefData = await getCodeChefData(codechef);
-        const spojData = await scrapeSPOJ(spoj);
-        const atcoderData = await scrapeAtCoder(atcoder);
-        const leetcodeData = await fetchLeetCodeContestsData(leetcode);
-        const codeforcesProblems = await fetchCodeforcesData(codeforces);
-        const codeforcesContests = await fetchCodeforcesContest(codeforces);
+        let codechefData = [];
+        if (codechef !== '')
+            codechefData = await getCodeChefData(codechef);
+
+        let spojData = [];
+        if (spoj !== '')
+            spojData = await scrapeSPOJ(spoj);
+
+        let atcoderData = [];
+        if (atcoder !== '')
+            atcoderData = await scrapeAtCoder(atcoder);
+
+        let leetcodeData = [];
+        if (leetcode !== '')
+            leetcodeData = await fetchLeetCodeContestsData(leetcode);
+
+        let codeforcesProblems = [];
+        let codeforcesContests = [];
+        let codeforcesData = [];
+        if (codeforces !== '') {
+            codeforcesProblems = await fetchCodeforcesData(codeforces);
+            codeforcesContests = await fetchCodeforcesContest(codeforces);
+            codeforcesData = {
+                username: codeforces,
+                problems: codeforcesProblems,
+                contests: codeforcesContests
+            }
+        }
+
         const data = {
             codechef: codechefData,
             spoj: spojData,
             atcoder: atcoderData,
             leetcode: leetcodeData,
-            codeforces: {
-                username: codeforces,
-                problems: codeforcesProblems,
-                contests: codeforcesContests
-            }
+            codeforces: codeforcesData
         };
         res.json(data);
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message, stack: error.stack });
     }
+    console.log('codechef: ', codechef);
+    console.log('spoj: ', spoj);
+    console.log('atcoder: ', atcoder);
+    console.log('leetcode: ', leetcode);
+    console.log('codeforces: ', typeof (codeforces));
 });
 
 
