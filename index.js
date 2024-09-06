@@ -237,6 +237,19 @@ async function fetchLeetCodeContestsData(username) {
         });
 
         const data = await response.json();
+        console.log(data)
+        if(data.errors){
+            return {
+                username: username,
+                error:`${username} does not exist`
+            }
+        }
+        if(data.data.userContestRanking===null){
+            return {
+                username: username,
+                error:`${username} did not participate in any contest`
+            }
+        }
         if (data.data && data.data.userContestRankingHistory) {
             data.data.userContestRankingHistory = data.data.userContestRankingHistory.filter(contest => contest.attended);
             data.data.userContestRankingHistory.reverse();
