@@ -4,6 +4,8 @@ const app = express();
 const cors = require('cors');
 app.use(cors({ origin: '*' }));
 const PORT = process.env.PORT || 3000;
+const fs = require('fs');
+
 
 app.get('/', (req, res) => {
     res.send('CP PlayGround Engine');
@@ -42,7 +44,24 @@ const getCodeChefData = async (username) => {
         const text = await res.text();
         const $ = cheerio.load(text);
         const allRatingIndex = text.indexOf('var all_rating =');
+        console.log('allRatingIndex: ', allRatingIndex);
         const endPoint = text.indexOf(';', allRatingIndex);
+        // fs.writeFile('data.txt', text,(err)=>{
+        //     if(err){
+        //         console.log(err,err.message);
+        //     }
+        // });
+        // handle the case when user is not found
+        if(allRatingIndex===-1){
+            let data = {
+                username: username,
+                contests: [],
+                problemsSolved: null,
+                message:'Username does not exist'
+            };
+            return data;
+        }
+        
 
         let retingData = JSON.parse(text.substring(allRatingIndex + 16, endPoint));
         console.log('retingData: ', retingData);
@@ -242,6 +261,10 @@ const fetchCodeforcesData = async (username) => {
     const url = `https://codeforces.com/api/user.status?handle=${username}`;
     const response = await fetch(url);
     let data = await response.json();
+    console.log('data: ', data);
+    if(data.status === 'FAILED') {
+        return [];
+    }
     data = data.result.filter(submission => submission.verdict === 'OK');
     return data;
 };
@@ -249,6 +272,9 @@ const fetchCodeforcesContest = async (username) => {
     const url = `https://codeforces.com/api/user.rating?handle=${username}`;
     const response = await fetch(url);
     let data = await response.json();
+    if(data.status === 'FAILED') {
+        return [];
+    }
     data = data.result.reverse();
     return data;
 }
